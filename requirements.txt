@@ -1,0 +1,8 @@
+streamlit
+langchain
+langchain-community
+faster-whisper
+faiss-cpu
+sentence-transformers
+ollama
+pydub

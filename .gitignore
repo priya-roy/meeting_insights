@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+
+# Virtual environment
+.env
+.venv
+env/
+venv/
+
+# Streamlit
+.streamlit/
+
+# Local settings
+*.log
+*.sqlite
+.DS_Store
+.qodo
+
+# Ollama / model files (don’t push heavy stuff)
+ollama/
