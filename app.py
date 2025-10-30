@@ -1,50 +1,64 @@
+# app.py
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+import sys
+from drive_utils import download_latest_session_files
+from meeting_processor import transcribe_audio, extract_text_from_pdf, generate_meeting_summary, send_email_with_summary
+from dotenv import load_dotenv
+load_dotenv()
+# Hardcoded recipients for testing
+RECIPIENTS = ["recepients-email@test.com"]
 
-import streamlit as st
-from meeting_processor import (
-    transcribe_video,
-    save_transcript_to_file,
-    process_and_store_embeddings,
-    generate_mom_and_insights
-)
+competency="PHP Drupal"
 
-st.set_page_config(page_title="Meeting Insights Generator", layout="wide")
+def main():
+    print("🛰️  Connecting to Google Drive and fetching latest session folder...")
+    try:
+        video_path, pdf_path, video_link, session_folder_name = download_latest_session_files()
+        print(f"✅ Video local path: {video_path}")
+        print(f"✅ PDF local path: {pdf_path}")
+        print(f"📁 Session folder: {session_folder_name}")
 
-st.title("🎥 Meeting Insights Generator (MP4 → Transcript → MOM + Insights)")
+        text_source = ""
 
-# --- Upload & Process in One Go ---
-uploaded_file = st.file_uploader("Upload your MP4 meeting recording", type=["mp4"])
+        # if video downloaded, transcribe
+        if video_path and os.path.exists(video_path):
+            print("🎙️ Transcribing video...")
+            try:
+                text_source = transcribe_audio(video_path)
+                print("✅ Transcription complete.")
+            except Exception as e:
+                print(f"⚠️ Transcription failed: {e}")
+                text_source = ""
 
-if uploaded_file and st.button("Generate Meeting Insights"):
-    with st.spinner("⏳ Processing your meeting recording..."):
-        try:
-            # Step 1: Transcribe
-            transcript = transcribe_video(uploaded_file)
-            transcript_path = save_transcript_to_file(uploaded_file.name, transcript)
-            st.success("✅ Transcription complete!")
+        # if no transcription, fallback to PDF
+        if not text_source:
+            if pdf_path and os.path.exists(pdf_path):
+                print("📄 Extracting PDF text...")
+                text_source = extract_text_from_pdf(pdf_path)
+                print("✅ PDF text extracted.")
+            else:
+                raise FileNotFoundError("No video or PDF text available to generate insights.")
 
-            # Step 2: Embedding
-            num_chunks, faiss_path = process_and_store_embeddings(transcript_path)
-            st.info(f"📚 Created {num_chunks} text chunks and stored in FAISS.")
+        # Generate summary
+        print("🧠 Generating meeting summary ...")
+        summary, model_used = generate_meeting_summary(text_source, session_name=session_folder_name, competency=competency)
+        print(f"✅ Summary generated using {model_used}")
 
-            # Step 3: Generate Insights
-            result_text, model_used = generate_mom_and_insights(faiss_path)
+        # Send email
+        print("📧 Sending email to recipients ...")
+        send_email_with_summary(RECIPIENTS, summary, video_drive_link=video_link, session_name=session_folder_name)
+        print("✅ Done. Email sent and summary saved.")
 
-            st.success(f"✅ Meeting Insights generated successfully using {model_used}!")
-            st.markdown("### 📝 Meeting Summary, Action Items & Insights")
-            st.markdown(result_text)
+        # Save local copy
+        out_file = f"session_insights_{session_folder_name}.txt"
+        with open(out_file, "w", encoding="utf-8") as fh:
+            fh.write(summary)
+        print(f"✅ Summary saved to {out_file}")
 
-            # Step 4: Download Option
-            st.download_button(
-                label="📄 Download MOM + Insights",
-                data=result_text,
-                file_name="meeting_summary.txt",
-                mime="text/plain"
-            )
+    except Exception as e:
+        print("❌ Error:", e)
+        sys.exit(1)
 
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-
-else:
-    st.info("👆 Upload your MP4 meeting file and click **Generate Meeting Insights**.")
+if __name__ == "__main__":
+    main()
