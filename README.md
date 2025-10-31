@@ -1,6 +1,8 @@
-# 📋 Overview
+# 🎯 Video Session Summariser – CLI Version
 
-This project automatically fetches Knowledge Meet recordings and related PDFs from Google Drive, transcribes the meeting video (or reads the PDF if no video), and then generates AI-powered meeting insights tailored to your technical competency — such as PHP Drupal.
+A Python-based tool that analyses technical knowledge-sharing or project discussion videos and produces structured, professional summaries suitable for internal knowledge management emails.
+
+This tool uses OpenAI GPT models (or compatible APIs) and a config-driven CLI interface — no UI changes required.
 
 ## The final output includes:
 
@@ -25,6 +27,7 @@ meeting-insights/
 ├── app.py                   # Main entry point
 ├── meeting_processor.py     # Core processing logic: transcription, summary, email
 ├── drive_utils.py           # Google Drive integration and file handling
+├── config.py              # Stores OpenAI settings, model name, and prompt template
 ├── meetinginsightsapp-xxxx.json   # Google service account credentials
 ├── requirements.txt         # Python dependencies
 └── README.md                # Project documentation

@@ -5,6 +5,7 @@ load_dotenv()
 import os
 import smtplib
 import re
+import markdown
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pydub import AudioSegment
@@ -110,25 +111,56 @@ def generate_meeting_summary(text_input, session_name="session", competency="PHP
     """Generate structured Knowledge Meet summary for a technical competency."""
 
     prompt = f"""
-You are an expert technical summariser specialised in Knowledge Meet (KM) sessions.
-The session belongs to the "{competency}" technical competency, and the target audience are experienced working professionals in this field.
+You are a **technical assistant** that analyses technical knowledge-sharing or project discussion videos.  
+Your goal is to extract the most relevant and actionable insights for internal knowledge management.  
+Focus on technical accuracy, logical structure, and readability.  
+The summary will be shared via email with the engineering team.
 
-Your goal is to generate a highly accurate, realistic, and concise summary of a 2-hour technical session, so that any professional can fully understand the discussion in just a few minutes.
+---
 
-Structure your response with the following sections:
+### 🔹 Step-by-Step Instructions
 
-1) **Executive Summary** – 2–3 lines explaining what the session covered overall and its key outcome.
-2) **Session Overview** – Purpose of the session, technologies or tools discussed, and who led or contributed (if mentioned).
-3) **Key Technical Topics Discussed** – Summarise each major topic or subtopic separately (e.g. new features, architecture, module, or workflow). Use bullet points.
-4) **Best Practices and Learnings** – List clear technical learnings, patterns, or improvements that were discussed or demonstrated.
-5) **Actionable Takeaways** – List specific recommendations, implementation tips, or next steps relevant to professionals in this competency.
-6) **Challenges, Risks or Gaps Identified** – Summarise any technical blockers, issues, or questions raised.
-7) **Conclusion** – A short closing summary of the session impact and how it contributes to skill growth in this technical area.
+1. **Extract Key Points:**  
+   Identify all distinct discussion areas such as topics, tools, frameworks, blockers, dependencies, and next steps.
 
-Ensure the tone is professional, factual, and concise.
-Avoid repetition and do not invent details that were not part of the transcript.
+2. **Summarise Clearly:**  
+   Write a structured and detailed summary under the following fixed sections — always include all, even if brief:
 
-Transcript:
+   - **Session Type** – Identify the nature of the session (e.g., Technical Deep Dive, Design Review, POC Discussion, Sprint Retrospective).  
+   - **Agenda** – State the primary goal or purpose of the session summarise in 4-5 points. 
+   - **Overview of Session** – Provide a concise summary of discussion flow, key themes, and main directions.  
+   - **Technical Discussion** – Detail the technical content discussed:
+     - Include mentions of tools, frameworks, APIs, configurations, workflows, or demos.  
+     - Add architecture insights, version numbers, performance metrics, or comparisons if available.  
+     - Retain technical terms and quotes accurately.  
+   - **Dependencies** – Mention dependencies, blockers, integrations, or external systems referenced.  
+   - **Decisions / Next Steps** – Clearly list outcomes, conclusions, and follow-up actions.  
+   - **Key Takeaways / Learning Points** – Capture lessons, insights, or best practices valuable for future reference.
+
+---
+
+### 🔹 Consistency Rules
+- Maintain **factual and logical continuity** — do not skip or merge unrelated points.  
+- Avoid altering or paraphrasing **critical technical terminology**.  
+- Keep **section headers identical** in every output for consistency.  
+- Use **bullet points** under each section for clarity and quick reading.
+
+---
+
+### 🔹 Formatting Requirements
+- Write in a **clean, professional markdown style**, suitable for internal knowledge-sharing emails.  
+- Keep tone **formal and concise**, while retaining technical depth.  
+- Aim for a length of **400–600 words**.  
+- Structure content with logical flow and precise wording.
+
+---
+
+### 🔹 Preprocessing Tip (optional, for Whisper + GPT workflow)
+Before summarisation, clean the transcript by removing filler words such as *“uh”*, *“you know”*, and *“basically”* to improve coherence.
+
+---
+
+**Transcript:**  
 {text_input}
 """
     prompt_template = PromptTemplate(template=prompt, input_variables=["transcript"])
@@ -151,26 +183,49 @@ def send_email_with_summary(recipients, summary_text, video_drive_link=None, ses
     sender = os.getenv("SMTP_SENDER_EMAIL", os.getenv("SMTP_USER"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
-    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_server = os.getenv("SMTP_SERVER")
+    smtp_port = int(os.getenv("SMTP_PORT"))
 
     if not sender or not smtp_user or not smtp_pass:
         raise EnvironmentError("Missing SMTP config: set SMTP_SENDER_EMAIL, SMTP_USER and SMTP_PASS environment variables.")
 
+    # 1. Convert the Markdown summary_text to HTML
+    # This correctly translates markdown headings (#), bold (**), lists (*), etc., into HTML tags (<h1>, <strong>, <ul>, <li>).
+    html_summary_content = markdown.markdown(summary_text)
+
+    # 2. Embed the converted HTML content directly into the email body
     html_body = f"""
-    <html><body>
-    <h3>KM Session Insights - {session_name}</h3>
-    {f'<p>🎥 <a href="{video_drive_link}">View Recording</a></p>' if video_drive_link else ''}
-    <hr>
-    <pre style="white-space:pre-wrap;">{summary_text}</pre>
-    <p>--<br>KM Insights Bot</p>
-    </body></html>
+    <html>
+    <head>
+        <style>
+            /* Optional: Add some basic styling for better readability */
+            body {{ font-family: sans-serif; line-height: 1.6; color: #333; }}
+            h3 {{ color: #004d99; border-bottom: 2px solid #eee; padding-bottom: 5px; }}
+            ul {{ list-style-type: disc; margin-left: 20px; }}
+            /* Optional: Style for code blocks, if your LLM uses them (```code```) */
+            pre {{ background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; overflow-x: auto; }}
+        </style>
+    </head>
+    <body>
+        <h3>KM Session Insights - {session_name}</h3>
+        {f'<p>🎥 <a href="{video_drive_link}">View Recording</a></p>' if video_drive_link else ''}
+        <hr>
+        
+        {html_summary_content}
+        
+        <p>--<br>KM Insights Bot</p>
+    </body>
+    </html>
     """
 
+    # 3. Rest of the email setup remains the same
     msg = MIMEMultipart()
     msg["From"] = sender
     msg["To"] = ", ".join(recipients)
     msg["Subject"] = f"KM Session Insights - {session_name}"
+    
+    # It's good practice to send both HTML and plain text (original markdown) for compatibility, 
+    # but for simplicity, we'll stick to sending just the HTML part as you did previously.
     msg.attach(MIMEText(html_body, "html"))
 
     try:
